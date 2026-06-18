@@ -1,7 +1,11 @@
 import * as THREE from 'three';
+import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
+
+const SKYBOX_PATH = '/skyboxes/NightSkyHDRI007_2K_HDR.exr';
+const FALLBACK_BG = 0x0b0b14;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
+scene.background = new THREE.Color(FALLBACK_BG);
 
 const camera = new THREE.PerspectiveCamera(
   75,
@@ -9,10 +13,14 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.z = 5;
+camera.position.set(0, 0, 5);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
 document.body.appendChild(renderer.domElement);
 
 const geometry = new THREE.BoxGeometry();
@@ -23,9 +31,27 @@ scene.add(cube);
 const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
 scene.add(ambientLight);
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-directionalLight.position.set(2, 2, 5);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1.1);
+directionalLight.position.set(4, 6, 8);
 scene.add(directionalLight);
+
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+pmremGenerator.compileEquirectangularShader();
+
+const loader = new EXRLoader();
+loader.load(
+  SKYBOX_PATH,
+  (texture) => {
+    const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+    scene.environment = envMap;
+    scene.background = envMap;
+    texture.dispose();
+  },
+  undefined,
+  (error) => {
+    console.error('Failed to load HDRI skybox:', error);
+  }
+);
 
 function animate() {
   requestAnimationFrame(animate);
