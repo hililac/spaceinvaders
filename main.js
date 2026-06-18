@@ -1,15 +1,18 @@
 import * as THREE from 'three';
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const SKYBOX_PATH = '/skyboxes/NightSkyHDRI007_2K_HDR.exr';
 const FALLBACK_BG = 0x0b0b14;
-const CUBE_ROTATION_SPEED = 0.01;
 const SKYBOX_ROTATION_SPEED = 0.015;
 const SKYBOX_PITCH_LIMIT = 1.2;
 const CONTROL_KEYS = new Set(['a', 'd', 'w', 's']);
 const ENEMY_COUNT = 3;
-const ENEMY_MINI_SCALE = 0.9;
 const ENEMY_START_RADIUS = 48;
+const SHIP_MODEL_PATH = '/models/ship/blaschka_glass_model_of_moon_jellyfish.glb';
+const ENEMY_MODEL_PATH = '/models/enemy/blaschka_glass_model_of_a_syllid_worm.glb';
+const SHIP_MODEL_SCALE = 0.03;
+const ENEMY_MODEL_SCALE = 0.1;
 const ENEMY_END_RADIUS = 1.2;
 const ENEMY_APPROACH_SPEED_MIN = 0.03;
 const ENEMY_APPROACH_SPEED_MAX = 0.05;
@@ -26,6 +29,10 @@ const CAMERA_SWAY_DISTANCE = 0.22;
 const CAMERA_SWAY_LERP = 0.08;
 const CAMERA_ROLL_MAX = 0.03;
 const CAMERA_ROLL_LERP = 0.1;
+const SHIP_ROLL_MAX = 0.4;
+const SHIP_PITCH_MAX = 0.25;
+const SHIP_TILT_LERP = 0.08;
+const SHIP_BASE_PITCH = -1.0;
 // END OPTIONAL CAMERA SMOOTHING
 
 const scene = new THREE.Scene();
@@ -59,15 +66,22 @@ const axisHelper = new THREE.AxesHelper(0.9);
 axisGroup.add(axisHelper);
 axisScene.add(axisGroup);
 
-const geometry = new THREE.BoxGeometry();
-const material = new THREE.MeshStandardMaterial({ color: 0x00ff88 });
-const cube = new THREE.Mesh(geometry, material);
-cube.position.y = CUBE_PLAYER_Y;
-scene.add(cube);
+let playerShip = null;
+const gltfLoader = new GLTFLoader();
+
+gltfLoader.load(
+  SHIP_MODEL_PATH,
+  (gltf) => {
+    playerShip = gltf.scene;
+    playerShip.scale.setScalar(SHIP_MODEL_SCALE);
+    playerShip.position.y = CUBE_PLAYER_Y;
+    scene.add(playerShip);
+  },
+  undefined,
+  (error) => { console.error('Failed to load ship model:', error); }
+);
 
 const enemies = [];
-const enemyGeometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
-const enemyMaterial = new THREE.MeshStandardMaterial({ color: 0xff4d6d });
 
 function randomEnemyAngle() {
   return -Math.PI / 2 + THREE.MathUtils.randFloatSpread(ENEMY_VISIBLE_ARC);
@@ -77,30 +91,37 @@ function randomEnemyHeight() {
   return THREE.MathUtils.randFloat(ENEMY_HEIGHT_MIN, ENEMY_HEIGHT_MAX);
 }
 
-for (let i = 0; i < ENEMY_COUNT; i += 1) {
-  const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
-  enemy.scale.set(ENEMY_MINI_SCALE, ENEMY_MINI_SCALE, ENEMY_MINI_SCALE);
+gltfLoader.load(
+  ENEMY_MODEL_PATH,
+  (gltf) => {
+    for (let i = 0; i < ENEMY_COUNT; i += 1) {
+      const enemy = gltf.scene.clone();
+      enemy.scale.setScalar(ENEMY_MODEL_SCALE);
 
-  const angle = randomEnemyAngle();
-  const startRadius = ENEMY_START_RADIUS - Math.random() * 3;
+      const angle = randomEnemyAngle();
+      const startRadius = ENEMY_START_RADIUS - Math.random() * 3;
 
-  enemy.userData.angle = angle;
-  enemy.userData.currentRadius = startRadius;
-  enemy.userData.approachSpeed = THREE.MathUtils.randFloat(
-    ENEMY_APPROACH_SPEED_MIN,
-    ENEMY_APPROACH_SPEED_MAX
-  );
-  enemy.userData.heightOffset = randomEnemyHeight();
+      enemy.userData.angle = angle;
+      enemy.userData.currentRadius = startRadius;
+      enemy.userData.approachSpeed = THREE.MathUtils.randFloat(
+        ENEMY_APPROACH_SPEED_MIN,
+        ENEMY_APPROACH_SPEED_MAX
+      );
+      enemy.userData.heightOffset = randomEnemyHeight();
 
-  enemy.position.set(
-    Math.cos(angle) * startRadius,
-    enemy.userData.heightOffset,
-    Math.sin(angle) * startRadius
-  );
+      enemy.position.set(
+        Math.cos(angle) * startRadius,
+        enemy.userData.heightOffset,
+        Math.sin(angle) * startRadius
+      );
 
-  scene.add(enemy);
-  enemies.push(enemy);
-}
+      scene.add(enemy);
+      enemies.push(enemy);
+    }
+  },
+  undefined,
+  (error) => { console.error('Failed to load enemy model:', error); }
+);
 
 const skyboxGeometry = new THREE.SphereGeometry(50, 64, 64);
 const skyboxMaterial = new THREE.MeshBasicMaterial({
@@ -141,6 +162,8 @@ const pressedKeys = new Set();
 // BEGIN OPTIONAL CAMERA SMOOTHING
 let cameraSwayX = 0;
 let cameraRoll = 0;
+let shipRoll = 0;
+let shipPitch = 0;
 // END OPTIONAL CAMERA SMOOTHING
 
 function animate() {
@@ -148,6 +171,7 @@ function animate() {
 
   // BEGIN OPTIONAL CAMERA SMOOTHING
   let horizontalInput = 0;
+  let verticalInput = 0;
   // END OPTIONAL CAMERA SMOOTHING
 
   if (pressedKeys.has('a')) {
@@ -166,10 +190,12 @@ function animate() {
 
   if (pressedKeys.has('w')) {
     skyboxPitch -= SKYBOX_ROTATION_SPEED;
+    verticalInput -= 1;
   }
 
   if (pressedKeys.has('s')) {
     skyboxPitch += SKYBOX_ROTATION_SPEED;
+    verticalInput += 1;
   }
 
   skyboxPitch = THREE.MathUtils.clamp(
@@ -190,16 +216,20 @@ function animate() {
   camera.position.z = CAMERA_BASE_Z;
   camera.lookAt(0, CUBE_PLAYER_Y, 0);
   camera.rotation.z = cameraRoll;
+
+  if (playerShip) {
+    shipRoll = THREE.MathUtils.lerp(shipRoll, -horizontalInput * SHIP_ROLL_MAX, SHIP_TILT_LERP);
+    shipPitch = THREE.MathUtils.lerp(shipPitch, verticalInput * SHIP_PITCH_MAX, SHIP_TILT_LERP);
+    playerShip.rotation.z = shipRoll;
+    playerShip.rotation.x = SHIP_BASE_PITCH + shipPitch;
+  }
   // END OPTIONAL CAMERA SMOOTHING
 
   skybox.rotation.x = skyboxPitch;
   skybox.rotation.y = skyboxRotation;
   axisGroup.quaternion.copy(skybox.quaternion);
 
-  cube.rotation.x += CUBE_ROTATION_SPEED;
-  cube.rotation.y += CUBE_ROTATION_SPEED;
-
-  for (const enemy of enemies) {
+for (const enemy of enemies) {
     enemy.userData.currentRadius -= enemy.userData.approachSpeed;
 
     if (enemy.userData.currentRadius <= ENEMY_END_RADIUS) {
