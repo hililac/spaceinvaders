@@ -13,18 +13,24 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
   rather than physically moving a player through world space.
 */
 
-// --- Asset paths ---
+// ============================================================
+// SECTION: ASSET PATHS
+// ============================================================
 const SKYBOX_PATH = '/skyboxes/NightSkyHDRI007_2K_HDR.exr';
 const SHIP_MODEL_PATH = '/models/ship/blaschka_glass_model_of_moon_jellyfish.glb';
 const ENEMY_MODEL_PATH = '/models/enemy/blaschka_glass_model_of_a_syllid_worm.glb';
 
-// --- Scene tuning ---
+// ============================================================
+// SECTION: SCENE TUNING
+// ============================================================
 const FALLBACK_BG = 0x0b0b14;
 const SKYBOX_ROTATION_SPEED = 0.015;
 const SKYBOX_PITCH_LIMIT = 1.2;
 const CONTROL_KEYS = new Set(['a', 'd', 'w', 's']);
 
-// --- Enemy behavior ---
+// ============================================================
+// SECTION: ENEMY BEHAVIOR
+// ============================================================
 const ENEMY_COUNT = 3;
 const ENEMY_START_RADIUS = 48;
 const ENEMY_END_RADIUS = 1.2;
@@ -38,15 +44,21 @@ const ENEMY_HEADING_OFFSET_X = 0;
 const ENEMY_HEADING_OFFSET_Y = Math.PI;
 const ENEMY_HEADING_OFFSET_Z = 0;
 
-// --- Model scaling ---
+// ============================================================
+// SECTION: MODEL SCALING
+// ============================================================
 const SHIP_MODEL_SCALE = 0.03;
 const ENEMY_MODEL_SCALE = 0.1;
 
-// --- Axis mini-view inset ---
+// ============================================================
+// SECTION: AXIS MINI-VIEW INSET
+// ============================================================
 const AXIS_VIEWPORT_SIZE = 120;
 const AXIS_VIEWPORT_MARGIN = 16;
 
-// --- Camera + ship tilt smoothing ---
+// ============================================================
+// SECTION: CAMERA + SHIP TILT SMOOTHING
+// ============================================================
 const CAMERA_BASE_Y = 1.3;
 const CAMERA_BASE_Z = 5;
 const CAMERA_SWAY_DISTANCE = 0.22;
@@ -58,7 +70,9 @@ const SHIP_PITCH_MAX = 0.25;
 const SHIP_TILT_LERP = 0.08;
 const SHIP_BASE_PITCH = -0.5;
 
-// --- Core Three.js objects ---
+// ============================================================
+// SECTION: CORE THREE.JS OBJECTS
+// ============================================================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(FALLBACK_BG);
 
@@ -96,7 +110,9 @@ axisScene.add(axisGroup);
 // Used when the ship model has not loaded yet.
 const ENEMY_FALLBACK_TARGET = new THREE.Vector3(0, CUBE_PLAYER_Y, 0);
 
-// --- Runtime state ---
+// ============================================================
+// SECTION: RUNTIME STATE
+// ============================================================
 let playerShip = null;
 const enemies = [];
 // Set of currently held movement keys; updated by keydown/keyup handlers.
@@ -110,18 +126,26 @@ let cameraRoll = 0;
 let shipRoll = 0;
 let shipPitch = 0;
 
-// --- Loaders ---
+// ============================================================
+// SECTION: LOADERS
+// ============================================================
 const gltfLoader = new GLTFLoader();
 const exrLoader = new EXRLoader();
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 pmremGenerator.compileEquirectangularShader();
 
+// ============================================================
+// SECTION: ENEMY SPAWN ANGLE UTILITIES
+// ============================================================
 function randomEnemyAngle() {
   // Center enemy spawn angles in front of the player (-PI/2 on this setup)
   // and spread them across the configured visible arc.
   return -Math.PI / 2 + THREE.MathUtils.randFloatSpread(ENEMY_VISIBLE_ARC);
 }
 
+// ============================================================
+// SECTION: ENEMY CLONE CREATION + RANDOM COLORING
+// ============================================================
 function createEnemyFromTemplate(templateScene) {
   // Clone the loaded GLTF root so all enemies share source geometry/materials
   // but still maintain independent transform/userData state.
@@ -158,6 +182,9 @@ function createEnemyFromTemplate(templateScene) {
   enemies.push(enemy);
 }
 
+// ============================================================
+// SECTION: SHIP PLAYER MODEL LOADING
+// ============================================================
 function loadPlayerShip() {
   // Load player ship once and keep a shared reference for per-frame tilt updates.
   gltfLoader.load(
@@ -173,6 +200,9 @@ function loadPlayerShip() {
   );
 }
 
+// ============================================================
+// SECTION: ENEMY PLAYER MODEL LOADING
+// ============================================================
 function loadEnemies() {
   // Load one enemy asset and instantiate ENEMY_COUNT clones from it.
   gltfLoader.load(
@@ -187,6 +217,9 @@ function loadEnemies() {
   );
 }
 
+// ============================================================
+// SECTION: SKY SPHERE + WORLD LIGHTING SETUP
+// ============================================================
 const skyboxGeometry = new THREE.SphereGeometry(50, 64, 64);
 const skyboxMaterial = new THREE.MeshBasicMaterial({
   side: THREE.BackSide,
@@ -201,6 +234,9 @@ const directionalLight = new THREE.DirectionalLight(0xffffff, 1.1);
 directionalLight.position.set(4, 6, 8);
 scene.add(directionalLight);
 
+// ============================================================
+// SECTION: HDR SKYBOX / ENVIRONMENT MAP LOADING
+// ============================================================
 function loadSkybox() {
   // EXR provides HDR range; PMREM converts equirectangular data into a
   // prefiltered environment map that PBR materials can use for lighting.
@@ -222,10 +258,16 @@ function loadSkybox() {
   );
 }
 
+// ============================================================
+// SECTION: GAME ASSET BOOTSTRAP (SHIP + ENEMIES + SKYBOX)
+// ============================================================
 loadPlayerShip();
 loadEnemies();
 loadSkybox();
 
+// ============================================================
+// SECTION: WASD INPUT -> SKY ROTATION/PITCH STATE
+// ============================================================
 function updateSkyboxFromInput() {
   // Horizontal/vertical input values are normalized to -1, 0, or 1 and reused
   // by camera/ship smoothing so both visuals react consistently to controls.
@@ -261,6 +303,9 @@ function updateSkyboxFromInput() {
   return { horizontalInput, verticalInput };
 }
 
+// ============================================================
+// SECTION: CAMERA SWAY + SHIP PLAYER TILT UPDATE
+// ============================================================
 function updateCameraAndShip(horizontalInput, verticalInput) {
   // Smooth lateral camera sway to avoid abrupt left/right snapping.
   const targetSwayX = horizontalInput * CAMERA_SWAY_DISTANCE;
@@ -288,6 +333,9 @@ function updateCameraAndShip(horizontalInput, verticalInput) {
   playerShip.rotation.x = SHIP_BASE_PITCH + shipPitch;
 }
 
+// ============================================================
+// SECTION: ENEMY PLAYER RESET / RECYCLING
+// ============================================================
 function resetEnemy(enemy) {
   // Recycle enemies instead of deleting/recreating meshes to keep frame work cheap.
   enemy.userData.currentRadius = ENEMY_START_RADIUS;
@@ -295,6 +343,9 @@ function resetEnemy(enemy) {
   enemy.userData.heightOffset = CUBE_PLAYER_Y;
 }
 
+// ============================================================
+// SECTION: ENEMY PLAYER POSITION + FACING UPDATE
+// ============================================================
 function updateEnemyPosition(enemy) {
   // Move inward each frame along its current radial lane.
   enemy.userData.currentRadius -= enemy.userData.approachSpeed;
@@ -334,6 +385,9 @@ function updateEnemyPosition(enemy) {
   enemy.rotateZ(ENEMY_HEADING_OFFSET_Z);
 }
 
+// ============================================================
+// SECTION: ENEMY PLAYER UPDATE LOOP
+// ============================================================
 function updateEnemies() {
   // Centralized enemy update pass makes animate() easier to scan.
   for (const enemy of enemies) {
@@ -341,6 +395,9 @@ function updateEnemies() {
   }
 }
 
+// ============================================================
+// SECTION: AXIS MINI-VIEW RENDER PASS
+// ============================================================
 function renderAxisInset() {
   // Render a small orientation widget in the top-left corner.
   // Scissor confines drawing to the inset rectangle.
@@ -363,6 +420,9 @@ function renderAxisInset() {
   renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
 }
 
+// ============================================================
+// SECTION: MAIN GAME LOOP (INPUT -> UPDATE -> RENDER)
+// ============================================================
 function animate() {
   // Request next frame first to keep animation loop continuous.
   requestAnimationFrame(animate);
@@ -387,6 +447,9 @@ function animate() {
   renderAxisInset();
 }
 
+// ============================================================
+// SECTION: KEYBOARD INPUT STATE MANAGEMENT
+// ============================================================
 function updateKeyState(event, isPressed) {
   const key = event.key.toLowerCase();
 
@@ -404,6 +467,9 @@ function updateKeyState(event, isPressed) {
   event.preventDefault();
 }
 
+// ============================================================
+// SECTION: DOM INPUT LISTENERS
+// ============================================================
 window.addEventListener('keydown', (event) => {
   updateKeyState(event, true);
 });
@@ -412,6 +478,9 @@ window.addEventListener('keyup', (event) => {
   updateKeyState(event, false);
 });
 
+// ============================================================
+// SECTION: APP STARTUP + RESIZE HANDLING
+// ============================================================
 animate();
 
 window.addEventListener('resize', () => {
