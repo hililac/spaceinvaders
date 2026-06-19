@@ -177,7 +177,21 @@ function createEnemyFromTemplate(templateScene) {
     }
   });
 
-  
+    const hitboxPadding = 0.4;
+    const box = new THREE.Box3().setFromObject(enemy);
+    box.expandByScalar(hitboxPadding);
+
+    const boxHelper = new THREE.Box3Helper(box, 0xff0000);
+    scene.add(boxHelper);
+
+    enemy.userData.hitbox = box;
+    enemy.userData.hitboxHelper = boxHelper;
+    enemy.userData.hitboxPadding = hitboxPadding;
+
+ 
+
+
+
   scene.add(enemy);
   enemies.push(enemy);
 }
@@ -383,6 +397,9 @@ function updateEnemyPosition(enemy) {
   enemy.rotateX(ENEMY_HEADING_OFFSET_X);
   enemy.rotateY(ENEMY_HEADING_OFFSET_Y);
   enemy.rotateZ(ENEMY_HEADING_OFFSET_Z);
+
+  enemy.userData.hitbox.setFromObject(enemy);
+  enemy.userData.hitbox.expandByScalar(enemy.userData.hitboxPadding);
 }
 
 // ============================================================
